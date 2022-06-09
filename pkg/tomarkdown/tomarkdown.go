@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"text/template"
 	"time"
@@ -174,7 +175,9 @@ func (tm *ToMarkdown) GenBlock(bType notion.BlockType, block MdBlock) error {
 	t := template.New(fmt.Sprintf("%s.gohtml", bType)).Funcs(funcs)
 	tpl, err := t.ParseFS(mdTemplatesFS, fmt.Sprintf("templates/%s.*", bType))
 	if err != nil {
-		return err
+		fmt.Println("err, using empty template instead:", err)
+		tpl = &template.Template{}
+		tpl = tpl.New("Dummy")
 	}
 
 	if err := tpl.Execute(tm.ContentBuffer, block); err != nil {
@@ -189,34 +192,8 @@ func (tm *ToMarkdown) GenBlock(bType notion.BlockType, block MdBlock) error {
 	return nil
 }
 
-func (tm *ToMarkdown) downloadImage(image *notion.FileBlock) error {
-	download := func(imgURL string) (string, error) {
-		resp, err := http.Get(imgURL)
-		if err != nil {
-			return "", err
-		}
-
-		imgFilename, err := tm.saveTo(resp.Body, imgURL, tm.ImgSavePath)
-		if err != nil {
-			return "", err
-		}
-
-		return filepath.Join(tm.ImgVisitPath, imgFilename), nil
-	}
-
-	var err error
-	if image.Type == notion.FileTypeExternal {
-		image.External.URL, err = download(image.External.URL)
-	}
-	if image.Type == notion.FileTypeFile {
-		image.File.URL, err = download(image.File.URL)
-	}
-
-	return err
-}
-
-func (tm *ToMarkdown) saveTo(reader io.Reader, rawURL, distDir string) (string, error) {
-	u, err := url.Parse(rawURL)
+func urlToImageName(imgURL string) (string, error) {
+	u, err := url.Parse(imgURL)
 	if err != nil {
 		return "", fmt.Errorf("malformed url: %s", err)
 	}
@@ -228,19 +205,53 @@ func (tm *ToMarkdown) saveTo(reader io.Reader, rawURL, distDir string) (string, 
 		imageFilename = splitPaths[len(splitPaths)-2] + filepath.Ext(u.Path)
 	}
 
-	if err := os.MkdirAll(distDir, 0755); err != nil {
-		return "", fmt.Errorf("%s: %s", distDir, err)
+	return fmt.Sprintf("%s_%s", u.Hostname(), imageFilename), nil
+}
+
+func (tm *ToMarkdown) _downloadImage(imgURL string) (string, error) {
+	if err := os.MkdirAll(tm.ImgSavePath, 0755); err != nil {
+		return "", fmt.Errorf("%s: %s", tm.ImgSavePath, err)
 	}
 
-	filename := fmt.Sprintf("%s_%s", u.Hostname(), imageFilename)
-	out, err := os.Create(filepath.Join(distDir, filename))
+	// Get dst path
+	filename, err := urlToImageName(imgURL)
+	if err != nil {
+		return "", err
+	}
+	diskPath := filepath.Join(tm.ImgSavePath, filename)
+	webPath := filepath.Join(tm.ImgVisitPath, filename)
+
+	// path exist? Skip!
+	if _, err := os.Stat(diskPath); err == nil {
+		return webPath, nil
+	}
+
+	out, err := os.Create(diskPath)
 	if err != nil {
 		return "", fmt.Errorf("couldn't create image file: %s", err)
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, reader)
-	return filename, err
+	resp, err := http.Get(imgURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return webPath, nil
+}
+
+func (tm *ToMarkdown) downloadImage(image *notion.FileBlock) (err error) {
+	if image.Type == notion.FileTypeExternal {
+		image.External.URL, err = tm._downloadImage(image.External.URL)
+	}
+	if image.Type == notion.FileTypeFile {
+		image.File.URL, err = tm._downloadImage(image.File.URL)
+	}
+	return err
 }
 
 // injectBookmarkInfo set bookmark info into the extra map field
@@ -264,6 +275,12 @@ func (tm *ToMarkdown) injectBookmarkInfo(bookmark *notion.Bookmark, extra *map[s
 // injectFrontMatter convert the prop to the front-matter
 func (tm *ToMarkdown) injectFrontMatter(key string, property notion.DatabasePageProperty) {
 	var fmv interface{}
+
+	// Prevent nil pointer on empty select options
+	if reflect.ValueOf(property.Value()).IsNil() {
+		return
+	}
+
 	switch prop := property.Value().(type) {
 	case *notion.SelectOptions:
 		fmv = prop.Name
@@ -285,11 +302,13 @@ func (tm *ToMarkdown) injectFrontMatter(key string, property notion.DatabasePage
 		fmv = *prop
 	case *float64:
 		fmv = *prop
+	case *bool:
+		fmv = *prop
 	default:
 		fmt.Printf("Unsupport prop: %s - %T\n", prop, prop)
 	}
 
-	if fmv == nil {
+	if fmv == nil || fmv == "" {
 		return
 	}
 
@@ -337,7 +356,15 @@ func ConvertRich(t notion.RichText) string {
 				fmt.Sprintf("[%s](%s)", t.Text.Content, t.Text.Link.URL),
 			)
 		}
-		return fmt.Sprintf(emphFormat(t.Annotations), t.Text.Content)
+
+		// Ugh. Notion sometimes includes a trailing space in rich text markup (bold),
+		// which doesn't go well with markdown. To fix, we check here for trailing spaces
+		// and move them out of the markdowned snippet. --WdG
+		orig := t.Text.Content
+		stripped := strings.TrimRight(orig, " ")
+		cutoff := orig[len(stripped):]
+		return fmt.Sprintf(emphFormat(t.Annotations), stripped) + cutoff
+
 	case notion.RichTextTypeEquation:
 	case notion.RichTextTypeMention:
 	}

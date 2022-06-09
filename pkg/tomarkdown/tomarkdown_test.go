@@ -2,7 +2,6 @@ package tomarkdown
 
 import (
 	"embed"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"

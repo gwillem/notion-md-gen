@@ -9,10 +9,12 @@ import (
 )
 
 type Notion struct {
+	Key            string
 	DatabaseID     string   `yaml:"databaseId"`
 	FilterProp     string   `yaml:"filterProp"`
 	FilterValue    []string `yaml:"filterValue"`
-	PublishedValue string   `yaml:"publishedValue"`
+	FilterArticles bool
+	PublishedValue string `yaml:"publishedValue"`
 }
 
 type Markdown struct {
