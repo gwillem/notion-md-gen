@@ -44,6 +44,9 @@ func Run(config Config) error {
 			fmt.Println("Not marked for publication, skipping")
 			continue
 		}
+
+		*page.Properties.(notion.DatabasePageProperties)["Published"].Checkbox = true
+
 		// fmt.Println("Converting", len(blocks), "blocks")
 		// Generate content to file
 		if err := generate(page, blocks, config.Markdown); err != nil {

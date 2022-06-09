@@ -8,3 +8,5 @@ web/
 .env
 .coverprofile
 notion-md-gen.yaml
+images
+posts

@@ -17,6 +17,7 @@ import (
 	"github.com/Masterminds/sprig"
 	"github.com/dstotijn/go-notion"
 	"github.com/otiai10/opengraph"
+	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,16 +25,7 @@ import (
 var mdTemplatesFS embed.FS
 
 var (
-	extendedSyntaxBlocks            = []notion.BlockType{notion.BlockTypeBookmark, notion.BlockTypeCallout}
-	blockTypeInExtendedSyntaxBlocks = func(bType notion.BlockType) bool {
-		for _, blockType := range extendedSyntaxBlocks {
-			if blockType == bType {
-				return true
-			}
-		}
-
-		return false
-	}
+	extendedSyntaxBlocks = []notion.BlockType{notion.BlockTypeBookmark, notion.BlockTypeCallout}
 )
 
 type MdBlock struct {
@@ -50,6 +42,16 @@ type ToMarkdown struct {
 	ContentTemplate string
 
 	extra map[string]interface{}
+}
+
+func blockTypeInExtendedSyntaxBlocks(bType notion.BlockType) bool {
+	for _, blockType := range extendedSyntaxBlocks {
+		if blockType == bType {
+			return true
+		}
+	}
+
+	return false
 }
 
 func New() *ToMarkdown {
@@ -159,7 +161,7 @@ func (tm *ToMarkdown) GenContentBlocks(blocks []notion.Block, depth int) error {
 			return err
 		}
 
-		if err := tm.GenBlock(block.Type, mdb); err != nil {
+		if err := tm.GenBlock(string(block.Type), mdb); err != nil {
 			return err
 		}
 		lastBlockType = block.Type
@@ -168,10 +170,29 @@ func (tm *ToMarkdown) GenContentBlocks(blocks []notion.Block, depth int) error {
 	return nil
 }
 
-func (tm *ToMarkdown) GenBlock(bType notion.BlockType, block MdBlock) error {
+func urlToDomain(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Hostname() == "" {
+		fmt.Println(err)
+		return "unknown"
+	}
+	domain, err := publicsuffix.EffectiveTLDPlusOne(u.Hostname())
+	if err != nil {
+		fmt.Println(err)
+		return "unknown"
+	}
+	return domain
+}
+
+func (tm *ToMarkdown) GenBlock(bType string, block MdBlock) error { // notion.BlockType
 	funcs := sprig.TxtFuncMap()
 	funcs["deref"] = func(i *bool) bool { return *i }
 	funcs["rich2md"] = ConvertRichText
+
+	if bType == "embed" {
+		bType += "_" + urlToDomain(block.Embed.URL)
+	}
+
 	t := template.New(fmt.Sprintf("%s.gohtml", bType)).Funcs(funcs)
 	tpl, err := t.ParseFS(mdTemplatesFS, fmt.Sprintf("templates/%s.*", bType))
 	if err != nil {

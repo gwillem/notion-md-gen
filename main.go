@@ -10,12 +10,12 @@ import (
 
 var opts struct {
 	// Verbose  []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
-	NotionKey   string `short:"k" description:"Notion API key" env:"NOTION_SECRET" required:"yes"`
-	DatabaseID  string `short:"d" description:"Database ID" required:"yes"`
-	PostPath    string `long:"post-path" default:"./posts"`
-	ImgPath     string `long:"img-path" default:"./images"`
-	ImgURL      string `long:"img-url" default:"/images/notion"`
-	Development bool   `long:"dev" description:"Dump all articles"`
+	NotionKey  string `short:"k" description:"Notion API key" env:"NOTION_SECRET" required:"yes"`
+	DatabaseID string `short:"d" description:"Database ID" required:"yes"`
+	PostPath   string `long:"post-path" default:"./posts"`
+	ImgPath    string `long:"img-path" default:"./images"`
+	ImgURL     string `long:"img-url" default:"/images/notion"`
+	Dump       bool   `long:"dump" description:"Dump all articles, don't filter"`
 }
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 		Notion: generator.Notion{
 			Key:            opts.NotionKey,
 			DatabaseID:     opts.DatabaseID,
-			FilterArticles: !opts.Development,
+			FilterArticles: !opts.Dump,
 			// FilterProp:     "Status",
 			// FilterValue:    []string{"Finished", "Published"},
 			// PublishedValue: "Published",
