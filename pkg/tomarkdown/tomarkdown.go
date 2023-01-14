@@ -96,10 +96,16 @@ func (tm *ToMarkdown) GenerateTo(blocks []notion.Block, writer io.Writer) error 
 		return err
 	}
 
+	// defaults to jekyll {% raw %} template
 	if tm.ContentTemplate != "" {
-		t, err := template.ParseFiles(tm.ContentTemplate)
+		// First, test if present in embedded FS
+		t, err := template.ParseFS(mdTemplatesFS, tm.ContentTemplate)
 		if err != nil {
-			return err
+			// If not, test if present in local FS
+			t, err = template.ParseFiles(tm.ContentTemplate)
+			if err != nil {
+				return err
+			}
 		}
 		return t.Execute(writer, tm)
 	}

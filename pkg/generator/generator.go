@@ -29,7 +29,16 @@ func Run(config Config) error {
 	for i, page := range q.Results {
 		// fmt.Println(page)
 		// Get page blocks tree
-		fmt.Printf("[%d/%d] ", i+1, len(q.Results))
+		fmt.Printf("[%d/%d] %s\n", i+1, len(q.Results), getSlug(page))
+
+		// skip?
+		if cb, ok := page.Properties.(notion.DatabasePageProperties); ok {
+			if !*cb["Published"].Checkbox {
+				fmt.Println("SKIP")
+				continue
+			}
+		}
+
 		blocks, err := queryBlockChildren(client, page.ID)
 		if err != nil {
 			fmt.Println("Block error:", err)
@@ -40,12 +49,19 @@ func Run(config Config) error {
 			continue
 		}
 		// fmt.Println("Got:", page.Properties.(notion.DatabasePageProperties)["Published"])
-		if config.FilterArticles && !*page.Properties.(notion.DatabasePageProperties)["Published"].Checkbox {
-			fmt.Println("Not marked for publication, skipping")
-			continue
-		}
+		// if config.FilterArticles && !*page.Properties.(notion.DatabasePageProperties)["Published"].Checkbox {
+		// 	fmt.Println("Not marked for publication, skipping")
+		// 	continue
+		// }
 
-		*page.Properties.(notion.DatabasePageProperties)["Published"].Checkbox = true
+		// if prop := page.Properties.(notion.DatabasePageProperties); prop != nil {
+		// 	if !*prop["Published"].Checkbox {
+		// 		fmt.Println("Skipping, unpublished")
+		// 		continue
+		// 	}
+		// }
+
+		// *page.Properties.(notion.DatabasePageProperties)["Published"].Checkbox = true
 
 		// fmt.Println("Converting", len(blocks), "blocks")
 		// Generate content to file
@@ -61,8 +77,8 @@ func Run(config Config) error {
 
 func getTitle(page notion.Page) string {
 	for _, x := range []string{"Title", "Name"} {
-		if title := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)[x].Title); title != "" {
-			return title
+		if t := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)[x].Title); t != "" {
+			return t
 		}
 	}
 	return ""
@@ -85,7 +101,26 @@ func getSlug(page notion.Page) string {
 	)
 
 	escapedTitle = regexp.MustCompile(`[^\w\d\-]`).ReplaceAllString(escapedTitle, "")
+
+	if date := prop(page, "Date"); date != "" {
+		escapedTitle = date + "-" + escapedTitle
+	}
 	return escapedTitle
+}
+
+func prop(page notion.Page, key string) string {
+	props := page.Properties.(notion.DatabasePageProperties)
+	// pp.Print(props)
+	if props == nil {
+		return ""
+	}
+	if val, ok := props[key]; ok {
+		if val.Date != nil {
+			return val.Date.Start.Format("2006-01-02")
+		}
+		return tomarkdown.ConvertRichText(val.RichText)
+	}
+	return ""
 }
 
 func generate(page notion.Page, blocks []notion.Block, config Markdown) error {

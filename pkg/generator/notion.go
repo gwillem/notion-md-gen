@@ -2,34 +2,12 @@ package generator
 
 import (
 	"context"
-	"log"
 
 	"github.com/dstotijn/go-notion"
 )
 
-func filterFromConfig(config Notion) *notion.DatabaseQueryFilter {
-	if config.FilterProp == "" || len(config.FilterValue) == 0 {
-		return nil
-	}
-
-	properties := make([]notion.DatabaseQueryFilter, len(config.FilterValue))
-	for i, val := range config.FilterValue {
-		properties[i] = notion.DatabaseQueryFilter{
-			Property: config.FilterProp,
-			Select: &notion.SelectDatabaseQueryFilter{
-				Equals: val,
-			},
-		}
-	}
-
-	return &notion.DatabaseQueryFilter{
-		Or: properties,
-	}
-}
-
 func queryDatabase(client *notion.Client, config Notion) (notion.DatabaseQueryResponse, error) {
 	query := &notion.DatabaseQuery{
-		Filter:   filterFromConfig(config),
 		PageSize: 100,
 	}
 	return client.QueryDatabase(context.Background(), config.DatabaseID, query)
@@ -94,39 +72,4 @@ func retrieveBlockChildren(client *notion.Client, blockID string) (blocks []noti
 	}
 
 	return blocks, nil
-}
-
-// changeStatus changes the Notion article status to the published value if set.
-// It returns true if status changed.
-func changeStatus(client *notion.Client, p notion.Page, config Notion) bool {
-	// No published value or filter prop to change
-	if config.FilterProp == "" || config.PublishedValue == "" {
-		return false
-	}
-
-	if v, ok := p.Properties.(notion.DatabasePageProperties)[config.FilterProp]; ok {
-		if v.Select.Name == config.PublishedValue {
-			return false
-		}
-	} else { // No filter prop in page, can't change it
-		return false
-	}
-
-	updatedProps := make(notion.DatabasePageProperties)
-	updatedProps[config.FilterProp] = notion.DatabasePageProperty{
-		Select: &notion.SelectOptions{
-			Name: config.PublishedValue,
-		},
-	}
-
-	_, err := client.UpdatePage(context.Background(), p.ID,
-		notion.UpdatePageParams{
-			DatabasePageProperties: &updatedProps,
-		},
-	)
-	if err != nil {
-		log.Println("error changing status:", err)
-	}
-
-	return err == nil
 }

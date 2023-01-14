@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/gwillem/notion-md-gen/pkg/generator"
 	"github.com/jessevdk/go-flags"
@@ -15,22 +14,17 @@ var opts struct {
 	PostPath   string `long:"post-path" default:"./posts"`
 	ImgPath    string `long:"img-path" default:"./images"`
 	ImgURL     string `long:"img-url" default:"/images/notion"`
-	Dump       bool   `long:"dump" description:"Dump all articles, don't filter"`
 }
 
 func main() {
-	_, err := flags.Parse(&opts)
-	if err != nil {
-		os.Exit(1)
+	if _, err := flags.Parse(&opts); err != nil {
+		log.Fatal(err)
 	}
-
-	// fmt.Println("Starting notion export...")
 
 	config := generator.Config{
 		Notion: generator.Notion{
-			Key:            opts.NotionKey,
-			DatabaseID:     opts.DatabaseID,
-			FilterArticles: !opts.Dump,
+			Key:        opts.NotionKey,
+			DatabaseID: opts.DatabaseID,
 			// FilterProp:     "Status",
 			// FilterValue:    []string{"Finished", "Published"},
 			// PublishedValue: "Published",
@@ -40,6 +34,7 @@ func main() {
 			PostSavePath:    opts.PostPath,
 			ImageSavePath:   opts.ImgPath,
 			ImagePublicLink: opts.ImgURL,
+			// Template:        "pkg/tomarkdown/templates/jekyll.gohtml", //decided to add {%raw%} to code block instead
 		},
 	}
 
