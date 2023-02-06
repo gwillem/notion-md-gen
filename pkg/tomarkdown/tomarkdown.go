@@ -259,6 +259,7 @@ func (tm *ToMarkdown) _downloadImage(imgURL string) (string, error) {
 	}
 	defer out.Close()
 
+	// fmt.Println("Downloading", imgURL, "to", diskPath)
 	resp, err := http.Get(imgURL)
 	if err != nil {
 		return "", err
@@ -320,9 +321,9 @@ func (tm *ToMarkdown) injectFrontMatter(key string, property notion.DatabasePage
 	case []notion.RichText:
 		fmv = ConvertRichText(prop)
 	case *time.Time:
-		fmv = prop.Format("2006-01-02T15:04:05+07:00")
+		fmv = prop.Format("2006-01-02T15:04:05-07:00")
 	case *notion.Date:
-		fmv = prop.Start.Format("2006-01-02T15:04:05+07:00")
+		fmv = prop.Start.Format("2006-01-02T15:04:05-07:00")
 	case *notion.User:
 		fmv = prop.Name
 	case *string:
@@ -332,7 +333,7 @@ func (tm *ToMarkdown) injectFrontMatter(key string, property notion.DatabasePage
 	case *bool:
 		fmv = *prop
 	default:
-		fmt.Printf("Unsupport prop: %s - %T\n", prop, prop)
+		fmt.Printf("Unsupport prop: %v - %T\n", prop, prop)
 	}
 
 	if fmv == nil || fmv == "" {
